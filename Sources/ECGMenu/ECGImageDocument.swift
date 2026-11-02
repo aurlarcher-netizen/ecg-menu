@@ -72,11 +72,16 @@ final class ECGImageDocument: ObservableObject {
 
     /// Rotation de 90° (sens horaire ou anti-horaire) ; le cadre de rognage est réinitialisé
     func rotate(clockwise: Bool) {
-        guard let image else { return }
+        guard let image, let rotated = Self.rotated(image, clockwise: clockwise) else { return }
+        self.image = rotated
+        crop = Self.fullFrame
+    }
+
+    static func rotated(_ image: CGImage, clockwise: Bool) -> CGImage? {
         let w = image.width, h = image.height
         guard let ctx = CGContext(data: nil, width: h, height: w, bitsPerComponent: 8, bytesPerRow: 0,
                                   space: CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return }
+                                  bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
         if clockwise {
             ctx.translateBy(x: 0, y: CGFloat(w))
             ctx.rotate(by: -.pi / 2)
@@ -85,7 +90,22 @@ final class ECGImageDocument: ObservableObject {
             ctx.rotate(by: .pi / 2)
         }
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
-        self.image = ctx.makeImage()
+        return ctx.makeImage()
+    }
+
+    /// Rotation horaire de 0, 90, 180 ou 270°
+    static func rotated(_ image: CGImage, degrees: Int) -> CGImage? {
+        switch degrees {
+        case 90: return rotated(image, clockwise: true)
+        case 180: return rotated(image, clockwise: true).flatMap { rotated($0, clockwise: true) }
+        case 270: return rotated(image, clockwise: false)
+        default: return image
+        }
+    }
+
+    private func rotate(degrees: Int) {
+        guard degrees != 0, let image, let r = Self.rotated(image, degrees: degrees) else { return }
+        self.image = r
         crop = Self.fullFrame
     }
 
@@ -109,30 +129,28 @@ final class ECGImageDocument: ObservableObject {
         crop = Self.fullFrame
     }
 
-    /// Cadrage proposé par Claude. `sentCrop` : cadre de rognage au moment de l'envoi, car Claude a reçu
-    /// l'image déjà rognée et donne ses coordonnées dans celle-ci. Renvoie false si rien n'a changé.
+    /// Cadrage automatique. `sentCrop` : cadre de rognage au moment de l'envoi ; `preRotation` : rotation
+    /// appliquée à l'image avant de l'envoyer (sens lu sur l'écriture) ; `frame` : cadre de Claude dans l'image
+    /// qu'il a reçue ; `postRotation` : rotation déduite par Claude, si l'écriture n'a pas suffi.
+    /// Renvoie false si rien n'a changé.
     @discardableResult
-    func applyAutoFrame(_ frame: CGRect, rotation: Int, sentCrop: CGRect) -> Bool {
+    func applyAutoFrame(sentCrop: CGRect, preRotation: Int, frame: CGRect, postRotation: Int) -> Bool {
         guard let original = image else { return false }
         crop = sentCrop
         applyCrop()
+        rotate(degrees: preRotation)
 
         // Petite marge, bornée à l'image ; un cadre trop petit (mal placé) ou quasi complet est ignoré
         let margin = 0.01
         let minX = max(0, frame.minX - margin), minY = max(0, frame.minY - margin)
         let box = CGRect(x: minX, y: minY, width: min(1, frame.maxX + margin) - minX, height: min(1, frame.maxY + margin) - minY)
-        var changed = sentCrop != Self.fullFrame
+        var changed = sentCrop != Self.fullFrame || preRotation != 0 || postRotation != 0
         if box.width >= 0.3, box.height >= 0.3, box.width * box.height < 0.97 {
             crop = box
             applyCrop()
             changed = true
         }
-        switch rotation {
-        case 90: rotate(clockwise: true); changed = true
-        case 180: rotate(clockwise: true); rotate(clockwise: true); changed = true
-        case 270: rotate(clockwise: false); changed = true
-        default: break
-        }
+        rotate(degrees: postRotation)
         beforeAutoFrame = changed ? original : nil
         return changed
     }

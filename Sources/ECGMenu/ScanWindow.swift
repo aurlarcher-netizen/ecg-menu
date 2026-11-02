@@ -63,6 +63,8 @@ struct ScanView: View {
     @State private var analyzeAfterKey = false
     @State private var aiComment = ""
     @State private var aiDetail = ""
+    /// Contexte clinique facultatif envoyé avec l'ECG
+    @State private var clinicalContext = ""
     @State private var detailCopied = false
 
     var body: some View {
@@ -72,11 +74,12 @@ struct ScanView: View {
             editorArea
             if !aiDetail.isEmpty || !aiComment.isEmpty { commentBar }
             Divider()
+            contextBar
             layoutBar
         }
         // Image retirée (bouton Retirer ou Réinitialiser du compte rendu) : l'analyse part avec elle
         .onChange(of: doc.image == nil) { _, empty in
-            if empty { aiComment = ""; aiDetail = ""; message = "" }
+            if empty { aiComment = ""; aiDetail = ""; message = ""; clinicalContext = "" }
         }
         .alert("Envoyer l'ECG à Claude ?", isPresented: $showWarning) {
             Button("Envoyer") { analyze() }
@@ -127,6 +130,20 @@ struct ScanView: View {
         }
         .padding(10)
         .background(Color.purple.opacity(0.08))
+    }
+
+    /// Contexte clinique facultatif, pour aider Claude (variantes de la normale, seuils…)
+    private var contextBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "text.bubble").foregroundStyle(.secondary)
+            TextField("Contexte clinique facultatif : jeune homme sportif, origine africaine, sous bêtabloquant… (sans nom ni date de naissance)",
+                      text: $clinicalContext, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+                .lineLimit(1...3)
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 10)
+        .disabled(doc.image == nil)
     }
 
     /// « Élément : description » avec l'élément en gras
@@ -267,11 +284,16 @@ struct ScanView: View {
     private func analyze() {
         guard let image = doc.croppedImage, let source = doc.image else { return }
         let sentCrop = doc.crop
+        let context = clinicalContext
         analyzing = true
         message = "Analyse par Claude en cours…"
         Task {
             do {
-                let analysis = try await ClaudeAnalyzer.analyze(image)
+                // Sens de l'ECG lu sur l'écriture, en local : Claude reçoit l'image déjà à l'endroit
+                let orientation = await Task.detached { ECGOrientation.uprightRotation(of: image) }.value
+                let preRotation = orientation.confident ? orientation.rotation : 0
+                let upright = ECGImageDocument.rotated(image, degrees: preRotation) ?? image
+                let analysis = try await ClaudeAnalyzer.analyze(upright, context: context)
                 await MainActor.run {
                     analyzing = false
                     aiComment = analysis.comment
@@ -279,7 +301,8 @@ struct ScanView: View {
                     message = "Compte rendu pré-rempli : relisez et corrigez chaque élément."
                     // Cadrage de Claude, seulement si l'image n'a pas changé pendant l'analyse
                     if doc.image === source,
-                       doc.applyAutoFrame(analysis.frame.rect, rotation: analysis.frame.rotation, sentCrop: sentCrop) {
+                       doc.applyAutoFrame(sentCrop: sentCrop, preRotation: preRotation, frame: analysis.frame.rect,
+                                          postRotation: orientation.confident ? 0 : analysis.frame.rotation) {
                         message += " ECG recadré par Claude (« Annuler le cadrage » pour revenir)."
                     }
                     onAnalysis(analysis)

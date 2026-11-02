@@ -65,12 +65,22 @@ struct ECGAnalysis: Decodable {
     /// Cadrage proposé par Claude, en fractions de l'image envoyée (origine en haut à gauche)
     struct Frame: Decodable {
         let left: Double, top: Double, right: Double, bottom: Double
-        /// Rotation horaire à appliquer après le rognage : 0, 90, 180 ou 270
-        let rotation: Int
+        /// Sens dans lequel se lit l'écriture sur l'image reçue (Claude décrit, l'app en déduit la rotation)
+        let textDirection: String
 
-        enum CodingKeys: String, CodingKey { case left, top, right, bottom, rotation = "rotation_clockwise" }
+        enum CodingKeys: String, CodingKey { case left, top, right, bottom, textDirection = "text_direction" }
 
         var rect: CGRect { CGRect(x: left, y: top, width: right - left, height: bottom - top) }
+
+        /// Rotation horaire qui remet l'écriture à l'endroit
+        var rotation: Int {
+            switch textDirection {
+            case "reads_top_to_bottom": return 270
+            case "upside_down": return 180
+            case "reads_bottom_to_top": return 90
+            default: return 0
+            }
+        }
     }
 
     enum CodingKeys: String, CodingKey {
@@ -180,8 +190,11 @@ enum ClaudeAnalyzer {
       hauteur de l'image telle que tu la reçois (0 = bord gauche ou haut, 1 = bord droit ou bas). Laisse une
       petite marge ; exclus les bords blancs, les marges du scanner et les en-têtes texte hors du tracé.
       Si l'image est déjà bien cadrée : 0, 0, 1, 1.
-      rotation_clockwise : rotation dans le sens des aiguilles d'une montre (0, 90, 180 ou 270) à appliquer
-      au rectangle pour que l'ECG soit à l'endroit, en paysage, textes lisibles et temps de gauche à droite.
+      text_direction : comment se lit l'écriture imprimée (noms des dérivations, vitesse, étalonnage) sur
+      l'image telle que tu la reçois. "upright" si elle se lit normalement de gauche à droite ;
+      "upside_down" si elle est à l'envers ; "reads_top_to_bottom" si les lignes de texte descendent
+      (il faut pencher la tête vers la droite pour lire) ; "reads_bottom_to_top" si elles montent
+      (tête penchée vers la gauche). Décris uniquement ce que tu vois, sans calculer de rotation.
     - comment : en français, 1 à 3 phrases courtes pour le médecin : qualité du tracé, étalonnage,
       éléments incertains ou non lisibles. Chaîne vide si rien à signaler.
     """
@@ -217,9 +230,10 @@ enum ClaudeAnalyzer {
                 "properties": [
                     "left": ["type": "number"], "top": ["type": "number"],
                     "right": ["type": "number"], "bottom": ["type": "number"],
-                    "rotation_clockwise": ["type": "integer", "enum": [0, 90, 180, 270]],
+                    "text_direction": ["type": "string",
+                                       "enum": ["upright", "upside_down", "reads_top_to_bottom", "reads_bottom_to_top"]],
                 ],
-                "required": ["left", "top", "right", "bottom", "rotation_clockwise"],
+                "required": ["left", "top", "right", "bottom", "text_direction"],
                 "additionalProperties": false,
             ] as [String: Any],
         ]
@@ -228,7 +242,14 @@ enum ClaudeAnalyzer {
     }
 
     /// Envoie l'image à Claude et renvoie sa lecture structurée
-    static func analyze(_ image: CGImage) async throws -> ECGAnalysis {
+    /// `context` : contexte clinique facultatif saisi par le médecin (âge, sport, origine, traitement…)
+    static func analyze(_ image: CGImage, context: String = "") async throws -> ECGAnalysis {
+        let context = context.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = context.isEmpty ? prompt : prompt + """
+
+            Contexte clinique donné par le médecin, à prendre en compte dans l'interprétation (variantes de la
+            normale, seuils, diagnostics à évoquer) : « \(context) »
+            """
         guard let key = APIKeyStore.read(), !key.isEmpty else { throw ClaudeAnalyzerError.noKey }
         guard let jpeg = jpegData(image) else { throw ClaudeAnalyzerError.badResponse }
 
@@ -243,7 +264,7 @@ enum ClaudeAnalyzer {
                 "content": [
                     ["type": "image", "source": ["type": "base64", "media_type": "image/jpeg",
                                                  "data": jpeg.base64EncodedString()]],
-                    ["type": "text", "text": prompt],
+                    ["type": "text", "text": text],
                 ],
             ]],
         ]
