@@ -31,7 +31,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         popover.behavior = .transient
         popover.delegate = self
-        popover.contentViewController = NSHostingController(rootView: ContentView(report: report))
+        // Taille fixée avant l'ouverture : sinon le popover se redimensionne après coup et déborde en haut de l'écran
+        let host = NSHostingController(rootView: ContentView(report: report))
+        host.sizingOptions = []
+        popover.contentViewController = host
+        popover.contentSize = ContentView.size
         ScanWindowController.shared.onAnalysis = { [weak self] analysis in
             guard let self else { return }
             self.report.apply(analysis)
@@ -54,6 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             popover.performClose(nil)
         } else {
             NSApp.activate(ignoringOtherApps: true)
+            popover.contentSize = ContentView.size
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
         }

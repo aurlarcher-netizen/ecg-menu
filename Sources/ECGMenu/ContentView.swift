@@ -7,6 +7,12 @@ struct ContentView: View {
     /// Texte du compte rendu, modifiable à la main ; régénéré dès qu'un choix change
     @State private var draft = ""
 
+    /// Taille du compte rendu : 680 pt de haut, réduite si l'écran est trop petit (la liste défile)
+    static var size: NSSize {
+        let available = (NSScreen.main?.visibleFrame.height ?? 800) - 40
+        return NSSize(width: 400, height: min(680, available))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -126,7 +132,7 @@ struct ContentView: View {
             Divider()
             footer
         }
-        .frame(width: 400, height: 680)
+        .frame(width: Self.size.width, height: Self.size.height)
         .onDisappear { HoverBubble.shared.hide() }
     }
 
