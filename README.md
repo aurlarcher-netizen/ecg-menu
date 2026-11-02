@@ -18,6 +18,22 @@ Petite application macOS de la barre des menus pour rédiger en quelques clics u
 - **Aide au survol** : chaque choix affiche un tracé type et un rappel des critères.
 - **Compte rendu** généré dans un ordre fixe, modifiable avant d'être copié (⇧⌘C).
 
+### Scan et analyse par Claude (v1.1)
+
+- **Scan d'ECG** depuis un scanner reconnu par macOS (vitre ou chargeur, 100 à 600 dpi), import d'un PDF
+  ou d'une image, glisser-déposer ; rotation, passage en paysage et rognage.
+- **Analyse par Claude Sonnet 5.5** (API Anthropic, clé personnelle rangée dans le Trousseau) :
+  - pré-remplit le formulaire du compte rendu ;
+  - ajoute au compte rendu les constatations que le formulaire ne couvre pas ;
+  - affiche une analyse détaillée, élément par élément, avec une conclusion ;
+  - tient compte d'un contexte clinique facultatif (« jeune sportif », « origine africaine »…) ;
+  - recadre l'ECG ; son sens est détecté sur le Mac d'après l'écriture imprimée.
+- **Enregistrement** sur le bouton « Enregistrer » uniquement, dans un dossier choisi et, au besoin, un second.
+- **Réglages du scanner** (clic droit sur l'icône) : scan direct sur la vitre, qualité, dossiers.
+
+L'image envoyée à Claude part sur les serveurs d'Anthropic : rogner nom, date de naissance et en-tête avant
+l'analyse. L'analyse est une aide à la lecture, à relire et valider.
+
 ## Installation
 
 1. Télécharger `ECGMenu.dmg` depuis la page [Releases](../../releases).
@@ -26,7 +42,7 @@ Petite application macOS de la barre des menus pour rédiger en quelques clics u
    L'app n'est pas signée par un compte développeur Apple, macOS demande donc une confirmation la première fois.
 4. Une icône QRS apparaît dans la barre des menus :
    - clic gauche : compte rendu ;
-   - clic droit : « Ouvrir au démarrage de l'ordinateur » ou « Quitter ».
+   - clic droit : « Scanner un ECG… », « Réglages du scanner », « Ouvrir au démarrage de l'ordinateur » ou « Quitter ».
 
 Nécessite macOS 14 (Sonoma) ou plus récent.
 
