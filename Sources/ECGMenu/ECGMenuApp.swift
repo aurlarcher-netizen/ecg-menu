@@ -110,6 +110,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         item("Scanner sur la vitre dès le clic sur le bouton de scan", #selector(toggleAutoScan), on: ScanSettings.autoFlatbedScan)
         menu.addItem(.separator())
+        let quality = NSMenuItem(title: "Qualité du scan", action: nil, keyEquivalent: "")
+        quality.submenu = NSMenu()
+        for q in ScanSettings.qualities {
+            let i = NSMenuItem(title: q.label, action: #selector(setQuality(_:)), keyEquivalent: "")
+            i.target = self
+            i.tag = q.dpi
+            i.state = ScanSettings.resolution == q.dpi ? .on : .off
+            quality.submenu?.addItem(i)
+        }
+        menu.addItem(quality)
+        menu.addItem(.separator())
         item("Dossier d'enregistrement : \(folderName(ScanSettings.scanFolder))…", #selector(chooseScanFolder))
         menu.addItem(.separator())
         item("Enregistrer aussi une copie dans un second dossier", #selector(toggleBackup), on: ScanSettings.backupEnabled)
@@ -118,6 +129,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     @objc private func toggleAutoScan() { ScanSettings.autoFlatbedScan.toggle() }
+
+    @objc private func setQuality(_ sender: NSMenuItem) { ScanSettings.resolution = sender.tag }
 
     @objc private func chooseScanFolder() {
         if let path = ScanSettings.chooseFolder(message: "Dossier où le bouton « Enregistrer » dépose les ECG", current: ScanSettings.scanFolder) {

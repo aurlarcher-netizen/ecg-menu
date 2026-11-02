@@ -4,6 +4,20 @@ import AppKit
 enum ScanSettings {
     private static let defaults = UserDefaults.standard
 
+    /// Qualités proposées (résolutions acceptées par les Brother du cabinet)
+    static let qualities: [(dpi: Int, label: String)] = [
+        (100, "Brouillon – 100 dpi"),
+        (200, "Standard – 200 dpi"),
+        (300, "Haute – 300 dpi (recommandé)"),
+        (600, "Maximale – 600 dpi (lent, fichiers lourds)"),
+    ]
+
+    /// Résolution du scan, en dpi
+    static var resolution: Int {
+        get { defaults.object(forKey: "scanResolution") as? Int ?? 300 }
+        set { defaults.set(newValue, forKey: "scanResolution") }
+    }
+
     /// Le bouton de scan du compte rendu lance aussitôt un scan sur la vitre
     static var autoFlatbedScan: Bool {
         get { defaults.bool(forKey: "autoFlatbedScan") }

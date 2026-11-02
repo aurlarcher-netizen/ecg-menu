@@ -34,7 +34,6 @@ final class ScannerManager: NSObject, ObservableObject, ICDeviceBrowserDelegate,
     private var openRetried = false
     /// Une session est en cours de fermeture : en rouvrir une tout de suite échoue aussi
     private var closingSince: Date?
-    private let resolution = 300
 
     /// Dernier scanner choisi, présélectionné à la prochaine ouverture
     private var preferredName: String? {
@@ -221,6 +220,7 @@ final class ScannerManager: NSObject, ObservableObject, ICDeviceBrowserDelegate,
     private func startScan(_ scanner: ICScannerDevice, _ functionalUnit: ICScannerFunctionalUnit) {
         functionalUnit.pixelDataType = .RGB
         functionalUnit.bitDepth = .depth8Bits
+        let resolution = ScanSettings.resolution
         let supported = functionalUnit.supportedResolutions
         functionalUnit.resolution = supported.contains(resolution)
             ? resolution
