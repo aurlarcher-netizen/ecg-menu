@@ -154,6 +154,8 @@ enum ClaudeAnalyzer {
 
     private static let prompt = """
     Voici un ECG 12 dérivations scanné. Lis-le comme un cardiologue et remplis le formulaire de compte rendu.
+    Il s'agit d'un nouveau patient : cette analyse est indépendante de toute autre, ne suppose aucun ECG
+    antérieur ni aucune information sur le patient en dehors de ce tracé et du contexte éventuellement fourni.
 
     Attention : l'ECG peut avoir été imprimé sur 2 feuilles de 6 dérivations (souvent DI à aVF d'un côté,
     V1 à V6 de l'autre), scannées ensemble ou l'une sous l'autre. Ces deux moitiés ne sont alors pas
