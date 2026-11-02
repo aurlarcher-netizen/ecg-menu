@@ -58,6 +58,7 @@ struct ECGAnalysis: Decodable {
     let sv1Mm: Double?
     let rv5Mm: Double?
     let additionalFindings: String
+    let detailedAnalysis: String
     let comment: String
 
     enum CodingKeys: String, CodingKey {
@@ -67,7 +68,7 @@ struct ECGAnalysis: Decodable {
         case tNegativeLeads = "t_negative_leads", tBiphasicLeads = "t_biphasic_leads"
         case tPeaked = "t_peaked", uWave = "u_wave", extrasystole
         case qtMs = "qt_ms", sv1Mm = "sv1_mm", rv5Mm = "rv5_mm"
-        case additionalFindings = "additional_findings", comment
+        case additionalFindings = "additional_findings", detailedAnalysis = "detailed_analysis", comment
     }
 }
 
@@ -132,6 +133,14 @@ enum ClaudeAnalyzer {
     private static let prompt = """
     Voici un ECG 12 dérivations scanné. Lis-le comme un cardiologue et remplis le formulaire de compte rendu.
 
+    Attention : l'ECG peut avoir été imprimé sur 2 feuilles de 6 dérivations (souvent DI à aVF d'un côté,
+    V1 à V6 de l'autre), scannées ensemble ou l'une sous l'autre. Ces deux moitiés ne sont alors pas
+    synchronisées : enregistrées à des moments différents, elles ne montrent pas les mêmes battements.
+    Repère d'abord la disposition. Si les feuilles sont séparées, n'aligne pas les complexes d'une moitié sur
+    l'autre, ne compare pas les battements entre elles, et mesure rythme, FC et intervalles dans chaque moitié
+    séparément ; si elles diffèrent (FC, extrasystole présente d'un seul côté), dis-le dans detailed_analysis.
+    Une feuille peut aussi manquer ou être coupée : ne déduis rien sur les dérivations absentes.
+
     Règles :
     - Vitesse du papier : lis-la sur le tracé si elle est imprimée (25 ou 50 mm/s), sinon null.
     - Fréquence cardiaque en bpm, mesurée sur le tracé ; null si impossible.
@@ -148,8 +157,13 @@ enum ClaudeAnalyzer {
       PR court, alternance électrique, aspect de Brugada, repolarisation précoce, ESV polymorphes ou en salves.
       N'y répète rien de ce qui est déjà dans le formulaire. Chaîne vide s'il n'y a rien d'utile à ajouter :
       c'est le cas le plus fréquent, n'ajoute rien par principe.
-    - comment : en français, 1 à 3 phrases courtes pour le médecin, hors compte rendu : qualité du tracé,
-      éléments incertains ou non lisibles.
+    - detailed_analysis : lecture complète et argumentée de l'ECG pour le médecin, en français, une ligne par
+      élément, au format « Élément : description », dans cet ordre : Rythme, Fréquence, Onde P, PR, QRS (durée,
+      morphologie, amplitude), Axe, Ondes Q, ST, Onde T, QT/QTc, Autres, puis Conclusion (synthèse et
+      principaux diagnostics à évoquer). Donne les valeurs mesurées (ms, mm, bpm) et les dérivations
+      concernées. Décris aussi ce qui est normal. Sépare les lignes par un retour à la ligne, sans markdown.
+    - comment : en français, 1 à 3 phrases courtes pour le médecin : qualité du tracé, étalonnage,
+      éléments incertains ou non lisibles. Chaîne vide si rien à signaler.
     """
 
     private static var schema: [String: Any] {
@@ -176,6 +190,7 @@ enum ClaudeAnalyzer {
             "sv1_mm": nullableNumber,
             "rv5_mm": nullableNumber,
             "additional_findings": ["type": "string"],
+            "detailed_analysis": ["type": "string"],
             "comment": ["type": "string"],
         ]
         return ["type": "object", "properties": properties,

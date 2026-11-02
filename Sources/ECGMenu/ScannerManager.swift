@@ -11,8 +11,8 @@ final class ScannerManager: NSObject, ObservableObject, ICDeviceBrowserDelegate,
     @Published var status = "Recherche des scanners…"
     @Published var isScanning = false
 
-    /// Appelé avec chaque page scannée
-    var onScan: ((URL) -> Void)?
+    /// Appelé avec chaque page scannée ; renvoie false si l'image n'a pas pu être ouverte
+    var onScan: ((URL) -> Bool)?
 
     /// Recherche des scanners, lancée une seule fois : l'arrêter puis la relancer fait échouer
     /// la connexion suivante (« failed to open a connection to the device »)
@@ -21,7 +21,14 @@ final class ScannerManager: NSObject, ObservableObject, ICDeviceBrowserDelegate,
     private var pendingScan = false
     /// Scan sur la vitre à lancer dès que le scanner est prêt
     private var autoScanPending = false
-    private var backupError: String?
+    /// Bilan des pages du scan en cours (ouverture, copies)
+    private var scanNotes: [String] = []
+    /// Dossier propre à l'app où le scanner écrit, à l'abri des logiciels qui surveillent le dossier de scan
+    private let scanWorkDirectory: URL = {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ECGMenu-scans", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
     private var openRetried = false
     /// Une session est en cours de fermeture : en rouvrir une tout de suite échoue aussi
     private var closingSince: Date?
@@ -219,28 +226,23 @@ final class ScannerManager: NSObject, ObservableObject, ICDeviceBrowserDelegate,
         }
 
         scanner.transferMode = .fileBased
-        scanner.downloadsDirectory = ScanSettings.scanDirectory
+        scanner.downloadsDirectory = scanWorkDirectory
         scanner.documentName = "ECG-\(Int(Date().timeIntervalSince1970))"
         scanner.documentUTI = UTType.png.identifier
-        backupError = nil
+        scanNotes = []
         scanner.requestScan()
     }
 
     func scannerDevice(_ scanner: ICScannerDevice, didScanTo url: URL) {
-        if let error = ScanSettings.backup(url) { backupError = error }
-        onScan?(url)
+        let opened = onScan?(url) ?? false
+        if !opened { scanNotes.append("Image scannée illisible (\(url.lastPathComponent)).") }
+        let stored = ScanSettings.store(url)
+        if !stored.isEmpty && !scanNotes.contains(stored) { scanNotes.append(stored) }
     }
 
     func scannerDevice(_ scanner: ICScannerDevice, didCompleteScanWithError error: Error?) {
         if let error { finish("Échec du scan : \(error.localizedDescription)"); return }
-        var message = "Scan terminé."
-        if ScanSettings.scanDirectory != FileManager.default.temporaryDirectory {
-            message += " Enregistré dans \(ScanSettings.scanDirectory.lastPathComponent)"
-                + (ScanSettings.backupEnabled && !ScanSettings.backupFolder.isEmpty && backupError == nil
-                   ? ", copie dans \(URL(fileURLWithPath: ScanSettings.backupFolder).lastPathComponent)." : ".")
-        }
-        if let backupError { message += " " + backupError }
-        finish(message)
+        finish((["Scan terminé."] + scanNotes).joined(separator: " "))
     }
 
     private func finish(_ message: String) {

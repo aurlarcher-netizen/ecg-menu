@@ -57,13 +57,15 @@ struct ScanView: View {
     @State private var showKeySheet = false
     @State private var analyzeAfterKey = false
     @State private var aiComment = ""
+    @State private var aiDetail = ""
+    @State private var detailCopied = false
 
     var body: some View {
         VStack(spacing: 0) {
             acquisitionBar
             Divider()
             editorArea
-            if !aiComment.isEmpty { commentBar }
+            if !aiDetail.isEmpty || !aiComment.isEmpty { commentBar }
             Divider()
             layoutBar
         }
@@ -83,15 +85,48 @@ struct ScanView: View {
         }
     }
 
-    /// Remarques de Claude, hors formulaire
+    /// Analyse détaillée de Claude et ses réserves sur le tracé
     private var commentBar: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "sparkles").foregroundStyle(.purple)
-            Text(aiComment).font(.callout).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-            Button { aiComment = "" } label: { Image(systemName: "xmark") }.buttonStyle(.borderless)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Analyse détaillée (\(ClaudeAnalyzer.model)) — à vérifier").font(.caption.bold()).foregroundStyle(.purple)
+                    ForEach(Array(aiDetail.split(separator: "\n").enumerated()), id: \.offset) { _, line in
+                        detailLine(String(line))
+                    }
+                    if !aiComment.isEmpty {
+                        Text(aiComment).font(.caption).foregroundStyle(.secondary).padding(.top, 2)
+                    }
+                }
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: 240)
+            VStack(spacing: 8) {
+                Button { aiDetail = ""; aiComment = "" } label: { Image(systemName: "xmark") }
+                    .help("Masquer l'analyse")
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString([aiDetail, aiComment].filter { !$0.isEmpty }.joined(separator: "\n\n"), forType: .string)
+                    detailCopied = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { detailCopied = false }
+                } label: { Image(systemName: detailCopied ? "checkmark" : "doc.on.doc") }
+                    .help("Copier l'analyse détaillée")
+            }
+            .buttonStyle(.borderless)
         }
         .padding(10)
         .background(Color.purple.opacity(0.08))
+    }
+
+    /// « Élément : description » avec l'élément en gras
+    private func detailLine(_ line: String) -> some View {
+        let parts = line.split(separator: ":", maxSplits: 1)
+        let text: Text = parts.count == 2 && parts[0].count <= 24
+            ? Text(parts[0].trimmingCharacters(in: .whitespaces) + " :").bold() + Text(parts[1])
+            : Text(line)
+        return text.font(.callout).fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: Acquisition
@@ -174,7 +209,7 @@ struct ScanView: View {
                 .disabled(doc.pixelSize.height <= doc.pixelSize.width)
                 .help("Passer en paysage si l'ECG est en portrait")
             Divider().frame(height: 20)
-            Button { doc.clear(); aiComment = ""; message = "" } label: { Label("Retirer", systemImage: "trash") }
+            Button { doc.clear(); aiComment = ""; aiDetail = ""; message = "" } label: { Label("Retirer", systemImage: "trash") }
                 .help("Retirer cette image pour en scanner ou en importer une autre")
             Divider().frame(height: 20)
             Button { doc.applyCrop() } label: { Label("Rogner", systemImage: "crop") }
@@ -226,6 +261,7 @@ struct ScanView: View {
                 await MainActor.run {
                     analyzing = false
                     aiComment = analysis.comment
+                    aiDetail = analysis.detailedAnalysis
                     message = "Compte rendu pré-rempli : relisez et corrigez chaque élément."
                     onAnalysis(analysis)
                 }

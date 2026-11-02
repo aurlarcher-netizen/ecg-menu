@@ -149,9 +149,14 @@ struct ContentView: View {
             .pickerStyle(.segmented).frame(width: 130)
             Button { ScanWindowController.shared.show(autoScan: ScanSettings.autoFlatbedScan) } label: {
                 Image(systemName: "doc.viewfinder")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 28, height: 24)
+                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
             }
             .help(ScanSettings.autoFlatbedScan ? "Scanner un ECG sur la vitre" : "Scanner un ECG")
-                .padding(.leading, 6)
+            .padding(.leading, 10)
+            .padding(.trailing, 2)
         }
         .buttonStyle(.borderless)
         .padding(10)
