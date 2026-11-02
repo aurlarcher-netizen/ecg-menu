@@ -37,6 +37,11 @@ final class ScanWindowController: NSObject, NSWindowDelegate {
         window?.makeKeyAndOrderFront(nil)
     }
 
+    /// Vide la fenêtre de scan (image, analyse) : appelé par « Réinitialiser » du compte rendu
+    func clear() {
+        doc.clear()
+    }
+
     func windowWillClose(_ notification: Notification) {
         scanner.stop()
         browsing = false
@@ -68,6 +73,10 @@ struct ScanView: View {
             if !aiDetail.isEmpty || !aiComment.isEmpty { commentBar }
             Divider()
             layoutBar
+        }
+        // Image retirée (bouton Retirer ou Réinitialiser du compte rendu) : l'analyse part avec elle
+        .onChange(of: doc.image == nil) { _, empty in
+            if empty { aiComment = ""; aiDetail = ""; message = "" }
         }
         .alert("Envoyer l'ECG à Claude ?", isPresented: $showWarning) {
             Button("Envoyer") { analyze() }
@@ -209,7 +218,7 @@ struct ScanView: View {
                 .disabled(doc.pixelSize.height <= doc.pixelSize.width)
                 .help("Passer en paysage si l'ECG est en portrait")
             Divider().frame(height: 20)
-            Button { doc.clear(); aiComment = ""; aiDetail = ""; message = "" } label: { Label("Retirer", systemImage: "trash") }
+            Button { doc.clear() } label: { Label("Retirer", systemImage: "trash") }
                 .help("Retirer cette image pour en scanner ou en importer une autre")
             Divider().frame(height: 20)
             Button { doc.applyCrop() } label: { Label("Rogner", systemImage: "crop") }

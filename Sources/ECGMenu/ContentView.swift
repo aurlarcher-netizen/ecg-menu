@@ -372,12 +372,12 @@ struct ContentView: View {
                 .onAppear { draft = report.reportText }
                 .onChange(of: report.reportText) { _, new in draft = new }
             HStack {
-                Button(role: .destructive) { report.reset() } label: {
+                Button(role: .destructive) { report.reset(); ScanWindowController.shared.clear() } label: {
                     Label("Réinitialiser", systemImage: "arrow.counterclockwise")
                 }
                 .buttonStyle(.bordered)
                 .keyboardShortcut("r", modifiers: .command)
-                .help("Tout remettre par défaut (⌘R)")
+                .help("Tout remettre par défaut, image scannée comprise (⌘R)")
                 Spacer()
                 Button {
                     NSPasteboard.general.clearContents()
