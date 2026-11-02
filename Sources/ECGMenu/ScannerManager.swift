@@ -262,8 +262,6 @@ final class ScannerManager: NSObject, ObservableObject, ICDeviceBrowserDelegate,
         receivedPage = true
         let opened = onScan?(url) ?? false
         if !opened { scanNotes.append("Image scannée illisible (\(url.lastPathComponent)).") }
-        let stored = ScanSettings.store(url)
-        if !stored.isEmpty && !scanNotes.contains(stored) { scanNotes.append(stored) }
     }
 
     /// Fichier le plus récent du dossier de travail, écrit depuis le début du scan

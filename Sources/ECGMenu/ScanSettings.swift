@@ -10,13 +10,13 @@ enum ScanSettings {
         set { defaults.set(newValue, forKey: "autoFlatbedScan") }
     }
 
-    /// Dossier où une copie de chaque scan est déposée (et où « Dernier scan » cherche) ; vide = aucun
+    /// Dossier où « Enregistrer » dépose l'ECG (et où « Dernier scan » cherche) ; vide = demandé au premier enregistrement
     static var scanFolder: String {
         get { defaults.string(forKey: "scanFolder") ?? "" }
         set { defaults.set(newValue, forKey: "scanFolder") }
     }
 
-    /// Copie de chaque scan dans un second dossier
+    /// À l'enregistrement, copie aussi dans un second dossier
     static var backupEnabled: Bool {
         get { defaults.bool(forKey: "backupEnabled") }
         set { defaults.set(newValue, forKey: "backupEnabled") }
@@ -40,23 +40,20 @@ enum ScanSettings {
         return panel.runModal() == .OK ? panel.url?.path : nil
     }
 
-    /// Dépose le scan dans le dossier de scan et, si activé, dans le dossier de copie.
-    /// Le scanner écrit toujours d'abord dans le dossier temporaire de l'app : un dossier surveillé
-    /// par un autre logiciel (intégration Doctolib…) peut déplacer le fichier avant qu'on l'ouvre.
-    /// Renvoie un message pour la barre d'état (vide si aucun dossier n'est réglé).
-    static func store(_ url: URL) -> String {
-        var targets: [String] = []
-        if !scanFolder.isEmpty { targets.append(scanFolder) }
-        if backupEnabled, !backupFolder.isEmpty, !targets.contains(backupFolder) { targets.append(backupFolder) }
+    /// Enregistre l'ECG mis en forme dans le dossier de scan et, si activé, dans le dossier de copie.
+    /// Renvoie un message pour la barre d'état.
+    static func save(_ png: Data, name: String) -> String {
+        var targets = [scanFolder]
+        if backupEnabled, !backupFolder.isEmpty, backupFolder != scanFolder { targets.append(backupFolder) }
 
         var saved: [String] = [], errors: [String] = []
         for path in targets {
             let folder = URL(fileURLWithPath: path)
             do {
-                try copy(url, into: folder)
+                try write(png, name: name, into: folder)
                 saved.append(folder.lastPathComponent)
             } catch {
-                errors.append("Copie dans \(folder.lastPathComponent) impossible : \(error.localizedDescription)")
+                errors.append("Enregistrement dans \(folder.lastPathComponent) impossible : \(error.localizedDescription)")
             }
         }
         var message = saved.isEmpty ? "" : "Enregistré dans " + saved.joined(separator: " et ") + "."
@@ -64,16 +61,24 @@ enum ScanSettings {
         return message
     }
 
-    private static func copy(_ url: URL, into folder: URL) throws {
+    /// Nom de fichier daté : « ECG 2026-11-02 19-30-12.png »
+    static func fileName(_ date: Date = Date()) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = "yyyy-MM-dd HH-mm-ss"
+        return "ECG \(f.string(from: date)).png"
+    }
+
+    private static func write(_ data: Data, name: String, into folder: URL) throws {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        // Nom déjà pris : « ECG-… 2.png », « ECG-… 3.png »…
-        let base = url.deletingPathExtension().lastPathComponent, ext = url.pathExtension
-        var target = folder.appendingPathComponent(url.lastPathComponent)
+        // Nom déjà pris : « ECG … 2.png », « ECG … 3.png »…
+        let base = (name as NSString).deletingPathExtension, ext = (name as NSString).pathExtension
+        var target = folder.appendingPathComponent(name)
         var n = 2
         while FileManager.default.fileExists(atPath: target.path) {
             target = folder.appendingPathComponent("\(base) \(n)").appendingPathExtension(ext)
             n += 1
         }
-        try FileManager.default.copyItem(at: url, to: target)
+        try data.write(to: target, options: .withoutOverwriting)
     }
 }

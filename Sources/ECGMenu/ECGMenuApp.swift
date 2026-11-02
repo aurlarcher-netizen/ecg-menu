@@ -110,9 +110,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         item("Scanner sur la vitre dès le clic sur le bouton de scan", #selector(toggleAutoScan), on: ScanSettings.autoFlatbedScan)
         menu.addItem(.separator())
-        item("Dossier de scan : \(folderName(ScanSettings.scanFolder))…", #selector(chooseScanFolder))
+        item("Dossier d'enregistrement : \(folderName(ScanSettings.scanFolder))…", #selector(chooseScanFolder))
         menu.addItem(.separator())
-        item("Copie automatique dans un second dossier", #selector(toggleBackup), on: ScanSettings.backupEnabled)
+        item("Enregistrer aussi une copie dans un second dossier", #selector(toggleBackup), on: ScanSettings.backupEnabled)
         item("Dossier de copie : \(folderName(ScanSettings.backupFolder))…", #selector(chooseBackupFolder))
         return menu
     }
@@ -120,7 +120,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     @objc private func toggleAutoScan() { ScanSettings.autoFlatbedScan.toggle() }
 
     @objc private func chooseScanFolder() {
-        if let path = ScanSettings.chooseFolder(message: "Dossier où enregistrer les scans d'ECG", current: ScanSettings.scanFolder) {
+        if let path = ScanSettings.chooseFolder(message: "Dossier où le bouton « Enregistrer » dépose les ECG", current: ScanSettings.scanFolder) {
             ScanSettings.scanFolder = path
         }
     }
@@ -135,7 +135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     @objc private func chooseBackupFolder() {
-        if let path = ScanSettings.chooseFolder(message: "Second dossier où copier automatiquement chaque scan",
+        if let path = ScanSettings.chooseFolder(message: "Second dossier où copier chaque ECG enregistré",
                                                 current: ScanSettings.backupFolder) {
             ScanSettings.backupFolder = path
         }

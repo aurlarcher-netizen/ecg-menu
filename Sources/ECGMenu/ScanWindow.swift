@@ -261,7 +261,8 @@ struct ScanView: View {
             Button { copyImage() } label: {
                 Label(copied ? "Copié !" : "Copier", systemImage: copied ? "checkmark" : "doc.on.doc")
             }
-            Button { saveImage() } label: { Label("Enregistrer…", systemImage: "square.and.arrow.down.on.square") }
+            Button { saveImage() } label: { Label("Enregistrer", systemImage: "square.and.arrow.down.on.square") }
+                .help(saveHelp)
                 .buttonStyle(.borderedProminent)
         }
         .disabled(doc.image == nil)
@@ -360,15 +361,24 @@ struct ScanView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
     }
 
+    /// Enregistre l'ECG tel qu'affiché (rognage et rotation compris) : rien n'est enregistré avant ce clic
     private func saveImage() {
         guard let data = doc.pngData else { return }
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.png]
-        panel.nameFieldStringValue = "ECG.png"
-        if panel.runModal() == .OK, let url = panel.url {
-            do { try data.write(to: url); message = "Enregistré : \(url.lastPathComponent)" }
-            catch { message = "Enregistrement impossible : \(error.localizedDescription)" }
+        if ScanSettings.scanFolder.isEmpty || !FileManager.default.fileExists(atPath: ScanSettings.scanFolder) {
+            guard let path = ScanSettings.chooseFolder(message: "Dossier où enregistrer les ECG", current: ScanSettings.scanFolder)
+            else { return }
+            scanFolder = path
         }
+        message = ScanSettings.save(data, name: ScanSettings.fileName())
+    }
+
+    private var saveHelp: String {
+        guard !scanFolder.isEmpty else { return "Enregistrer l'ECG (le dossier sera demandé)" }
+        var text = "Enregistrer l'ECG tel qu'affiché dans \(URL(fileURLWithPath: scanFolder).lastPathComponent)"
+        if ScanSettings.backupEnabled, !ScanSettings.backupFolder.isEmpty, ScanSettings.backupFolder != scanFolder {
+            text += " et \(URL(fileURLWithPath: ScanSettings.backupFolder).lastPathComponent)"
+        }
+        return text
     }
 }
 
