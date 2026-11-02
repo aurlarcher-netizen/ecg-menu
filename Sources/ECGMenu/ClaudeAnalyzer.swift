@@ -60,6 +60,18 @@ struct ECGAnalysis: Decodable {
     let additionalFindings: String
     let detailedAnalysis: String
     let comment: String
+    let frame: Frame
+
+    /// Cadrage proposé par Claude, en fractions de l'image envoyée (origine en haut à gauche)
+    struct Frame: Decodable {
+        let left: Double, top: Double, right: Double, bottom: Double
+        /// Rotation horaire à appliquer après le rognage : 0, 90, 180 ou 270
+        let rotation: Int
+
+        enum CodingKeys: String, CodingKey { case left, top, right, bottom, rotation = "rotation_clockwise" }
+
+        var rect: CGRect { CGRect(x: left, y: top, width: right - left, height: bottom - top) }
+    }
 
     enum CodingKeys: String, CodingKey {
         case paperSpeed = "paper_speed", heartRate = "heart_rate", axis, rhythm, bav, qrs
@@ -68,7 +80,7 @@ struct ECGAnalysis: Decodable {
         case tNegativeLeads = "t_negative_leads", tBiphasicLeads = "t_biphasic_leads"
         case tPeaked = "t_peaked", uWave = "u_wave", extrasystole
         case qtMs = "qt_ms", sv1Mm = "sv1_mm", rv5Mm = "rv5_mm"
-        case additionalFindings = "additional_findings", detailedAnalysis = "detailed_analysis", comment
+        case additionalFindings = "additional_findings", detailedAnalysis = "detailed_analysis", comment, frame
     }
 }
 
@@ -162,6 +174,14 @@ enum ClaudeAnalyzer {
       morphologie, amplitude), Axe, Ondes Q, ST, Onde T, QT/QTc, Autres, puis Conclusion (synthèse et
       principaux diagnostics à évoquer). Donne les valeurs mesurées (ms, mm, bpm) et les dérivations
       concernées. Décris aussi ce qui est normal. Sépare les lignes par un retour à la ligne, sans markdown.
+    - frame : cadrage de l'ECG pour l'afficher proprement.
+      left, top, right, bottom : bords du rectangle qui contient tout le tracé (12 dérivations, noms des
+      dérivations, signal d'étalonnage et bande de rythme comprises), en fractions de la largeur et de la
+      hauteur de l'image telle que tu la reçois (0 = bord gauche ou haut, 1 = bord droit ou bas). Laisse une
+      petite marge ; exclus les bords blancs, les marges du scanner et les en-têtes texte hors du tracé.
+      Si l'image est déjà bien cadrée : 0, 0, 1, 1.
+      rotation_clockwise : rotation dans le sens des aiguilles d'une montre (0, 90, 180 ou 270) à appliquer
+      au rectangle pour que l'ECG soit à l'endroit, en paysage, textes lisibles et temps de gauche à droite.
     - comment : en français, 1 à 3 phrases courtes pour le médecin : qualité du tracé, étalonnage,
       éléments incertains ou non lisibles. Chaîne vide si rien à signaler.
     """
@@ -192,6 +212,16 @@ enum ClaudeAnalyzer {
             "additional_findings": ["type": "string"],
             "detailed_analysis": ["type": "string"],
             "comment": ["type": "string"],
+            "frame": [
+                "type": "object",
+                "properties": [
+                    "left": ["type": "number"], "top": ["type": "number"],
+                    "right": ["type": "number"], "bottom": ["type": "number"],
+                    "rotation_clockwise": ["type": "integer", "enum": [0, 90, 180, 270]],
+                ],
+                "required": ["left", "top", "right", "bottom", "rotation_clockwise"],
+                "additionalProperties": false,
+            ] as [String: Any],
         ]
         return ["type": "object", "properties": properties,
                 "required": Array(properties.keys), "additionalProperties": false]

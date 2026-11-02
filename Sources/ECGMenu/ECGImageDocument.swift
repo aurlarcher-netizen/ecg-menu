@@ -8,6 +8,8 @@ final class ECGImageDocument: ObservableObject {
     @Published private(set) var image: CGImage?
     /// Cadre de rognage, en coordonnées normalisées (0…1, origine en haut à gauche)
     @Published var crop = CGRect(x: 0, y: 0, width: 1, height: 1)
+    /// Image avant le cadrage automatique, pour pouvoir l'annuler
+    @Published private(set) var beforeAutoFrame: CGImage?
 
     static let fullFrame = CGRect(x: 0, y: 0, width: 1, height: 1)
 
@@ -24,6 +26,7 @@ final class ECGImageDocument: ObservableObject {
         guard let loaded else { return false }
         image = loaded
         crop = Self.fullFrame
+        beforeAutoFrame = nil
         return true
     }
 
@@ -31,6 +34,7 @@ final class ECGImageDocument: ObservableObject {
     func clear() {
         image = nil
         crop = Self.fullFrame
+        beforeAutoFrame = nil
     }
 
     private static func loadImage(_ url: URL) -> CGImage? {
@@ -103,6 +107,41 @@ final class ECGImageDocument: ObservableObject {
         guard isCropped, let cropped = croppedImage else { return }
         image = cropped
         crop = Self.fullFrame
+    }
+
+    /// Cadrage proposé par Claude. `sentCrop` : cadre de rognage au moment de l'envoi, car Claude a reçu
+    /// l'image déjà rognée et donne ses coordonnées dans celle-ci. Renvoie false si rien n'a changé.
+    @discardableResult
+    func applyAutoFrame(_ frame: CGRect, rotation: Int, sentCrop: CGRect) -> Bool {
+        guard let original = image else { return false }
+        crop = sentCrop
+        applyCrop()
+
+        // Petite marge, bornée à l'image ; un cadre trop petit (mal placé) ou quasi complet est ignoré
+        let margin = 0.01
+        let minX = max(0, frame.minX - margin), minY = max(0, frame.minY - margin)
+        let box = CGRect(x: minX, y: minY, width: min(1, frame.maxX + margin) - minX, height: min(1, frame.maxY + margin) - minY)
+        var changed = sentCrop != Self.fullFrame
+        if box.width >= 0.3, box.height >= 0.3, box.width * box.height < 0.97 {
+            crop = box
+            applyCrop()
+            changed = true
+        }
+        switch rotation {
+        case 90: rotate(clockwise: true); changed = true
+        case 180: rotate(clockwise: true); rotate(clockwise: true); changed = true
+        case 270: rotate(clockwise: false); changed = true
+        default: break
+        }
+        beforeAutoFrame = changed ? original : nil
+        return changed
+    }
+
+    func undoAutoFrame() {
+        guard let previous = beforeAutoFrame else { return }
+        image = previous
+        crop = Self.fullFrame
+        beforeAutoFrame = nil
     }
 
     // MARK: Export

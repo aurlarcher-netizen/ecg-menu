@@ -23,6 +23,8 @@ final class ScannerManager: NSObject, ObservableObject, ICDeviceBrowserDelegate,
     private var autoScanPending = false
     /// Bilan des pages du scan en cours (ouverture, copies)
     private var scanNotes: [String] = []
+    private var receivedPage = false
+    private var scanStart = Date.distantPast
     /// Dossier propre à l'app où le scanner écrit, à l'abri des logiciels qui surveillent le dossier de scan
     private let scanWorkDirectory: URL = {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ECGMenu-scans", isDirectory: true)
@@ -204,6 +206,10 @@ final class ScannerManager: NSObject, ObservableObject, ICDeviceBrowserDelegate,
     // MARK: ICScannerDeviceDelegate
 
     func scannerDevice(_ scanner: ICScannerDevice, didSelect functionalUnit: ICScannerFunctionalUnit, error: Error?) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.scannerDevice(scanner, didSelect: functionalUnit, error: error) }
+            return
+        }
         guard pendingScan else { return }
         if let error { pendingScan = false; finish("Sélection de la source impossible : \(error.localizedDescription)"); return }
         // macOS répond d'abord avec une source vide, puis avec la source demandée et ses réglages
@@ -230,19 +236,45 @@ final class ScannerManager: NSObject, ObservableObject, ICDeviceBrowserDelegate,
         scanner.documentName = "ECG-\(Int(Date().timeIntervalSince1970))"
         scanner.documentUTI = UTType.png.identifier
         scanNotes = []
+        receivedPage = false
+        scanStart = Date()
         scanner.requestScan()
     }
 
+    // Les réponses du scanner peuvent arriver hors du fil principal : sans retour sur celui-ci,
+    // l'image est bien reçue mais la fenêtre ne se rafraîchit pas
     func scannerDevice(_ scanner: ICScannerDevice, didScanTo url: URL) {
+        DispatchQueue.main.async { [weak self] in self?.received(url) }
+    }
+
+    func scannerDevice(_ scanner: ICScannerDevice, didCompleteScanWithError error: Error?) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if let error { self.finish("Échec du scan : \(error.localizedDescription)"); return }
+            // Aucune page annoncée : reprendre le fichier écrit pendant ce scan, s'il existe
+            if !self.receivedPage, let url = self.latestWorkFile() { self.received(url) }
+            if !self.receivedPage { self.scanNotes.append("Aucune image reçue du scanner : réessayez, ou Réinitialiser.") }
+            self.finish((["Scan terminé."] + self.scanNotes).joined(separator: " "))
+        }
+    }
+
+    private func received(_ url: URL) {
+        receivedPage = true
         let opened = onScan?(url) ?? false
         if !opened { scanNotes.append("Image scannée illisible (\(url.lastPathComponent)).") }
         let stored = ScanSettings.store(url)
         if !stored.isEmpty && !scanNotes.contains(stored) { scanNotes.append(stored) }
     }
 
-    func scannerDevice(_ scanner: ICScannerDevice, didCompleteScanWithError error: Error?) {
-        if let error { finish("Échec du scan : \(error.localizedDescription)"); return }
-        finish((["Scan terminé."] + scanNotes).joined(separator: " "))
+    /// Fichier le plus récent du dossier de travail, écrit depuis le début du scan
+    private func latestWorkFile() -> URL? {
+        let files = (try? FileManager.default.contentsOfDirectory(at: scanWorkDirectory, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        let dated = files.compactMap { url -> (URL, Date)? in
+            guard let date = try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
+                  date >= scanStart.addingTimeInterval(-2) else { return nil }
+            return (url, date)
+        }
+        return dated.max { $0.1 < $1.1 }?.0
     }
 
     private func finish(_ message: String) {

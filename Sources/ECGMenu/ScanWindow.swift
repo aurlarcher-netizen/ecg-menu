@@ -225,6 +225,10 @@ struct ScanView: View {
                 .disabled(!doc.isCropped)
             Button("Cadre complet") { doc.crop = ECGImageDocument.fullFrame }
                 .disabled(!doc.isCropped)
+            if doc.beforeAutoFrame != nil {
+                Button { doc.undoAutoFrame() } label: { Label("Annuler le cadrage", systemImage: "arrow.uturn.backward") }
+                    .help("Revenir à l'image d'avant le recadrage et la rotation par Claude")
+            }
             Spacer()
             Button { showKeySheet = true } label: { Image(systemName: "key") }
                 .help("Clé API Anthropic")
@@ -261,7 +265,8 @@ struct ScanView: View {
     }
 
     private func analyze() {
-        guard let image = doc.croppedImage else { return }
+        guard let image = doc.croppedImage, let source = doc.image else { return }
+        let sentCrop = doc.crop
         analyzing = true
         message = "Analyse par Claude en cours…"
         Task {
@@ -272,6 +277,11 @@ struct ScanView: View {
                     aiComment = analysis.comment
                     aiDetail = analysis.detailedAnalysis
                     message = "Compte rendu pré-rempli : relisez et corrigez chaque élément."
+                    // Cadrage de Claude, seulement si l'image n'a pas changé pendant l'analyse
+                    if doc.image === source,
+                       doc.applyAutoFrame(analysis.frame.rect, rotation: analysis.frame.rotation, sentCrop: sentCrop) {
+                        message += " ECG recadré par Claude (« Annuler le cadrage » pour revenir)."
+                    }
                     onAnalysis(analysis)
                 }
             } catch {
