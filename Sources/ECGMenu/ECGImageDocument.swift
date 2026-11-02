@@ -38,20 +38,23 @@ final class ECGImageDocument: ObservableObject {
         return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 
-    /// Rend la première page d'un PDF à 300 dpi
+    /// Rend la première page d'un PDF à 300 dpi, dans son orientation d'affichage (pages paysage comprises)
     private static func renderPDF(_ url: URL) -> CGImage? {
         // Garder le document en mémoire : une page ne se dessine pas sans lui
         guard let pdf = PDFDocument(url: url), let page = pdf.page(at: 0) else { return nil }
-        let bounds = page.bounds(for: .mediaBox)
+        let bounds = page.bounds(for: .cropBox)
+        // Page tournée de 90° (ECG paysage) : la page se dessine tournée, l'image doit donc l'être aussi
+        let rotation = ((page.rotation % 360) + 360) % 360
+        let size = rotation == 90 || rotation == 270 ? CGSize(width: bounds.height, height: bounds.width) : bounds.size
         let scale: CGFloat = 300 / 72
-        let width = Int(bounds.width * scale), height = Int(bounds.height * scale)
+        let width = Int(size.width * scale), height = Int(size.height * scale)
         guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
                                   space: CGColorSpaceCreateDeviceRGB(),
                                   bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
         ctx.setFillColor(NSColor.white.cgColor)
         ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
         ctx.scaleBy(x: scale, y: scale)
-        page.draw(with: .mediaBox, to: ctx)
+        page.draw(with: .cropBox, to: ctx)
         return withExtendedLifetime(pdf) { ctx.makeImage() }
     }
 

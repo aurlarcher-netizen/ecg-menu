@@ -122,6 +122,8 @@ struct ScanView: View {
                     .disabled(scanner.isScanning || scanner.sources.isEmpty)
                     if scanner.isScanning { ProgressView().controlSize(.small) }
                 }
+                Button { scanner.reset() } label: { Image(systemName: "arrow.clockwise") }
+                    .help("Réinitialiser le scanner : ferme la connexion et relance la recherche")
                 Spacer()
                 Button { importFile() } label: { Label("Importer…", systemImage: "square.and.arrow.down") }
                 Button { openLatestScan() } label: { Label("Dernier scan", systemImage: "clock.arrow.circlepath") }
