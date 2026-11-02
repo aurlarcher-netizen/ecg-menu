@@ -32,6 +32,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.behavior = .transient
         popover.delegate = self
         popover.contentViewController = NSHostingController(rootView: ContentView(report: report))
+        ScanWindowController.shared.onAnalysis = { [weak self] analysis in
+            guard let self else { return }
+            self.report.apply(analysis)
+            if !self.popover.isShown { self.togglePopover() }
+        }
     }
 
     @objc private func statusItemClicked() {
@@ -68,11 +73,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                                action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
         login.target = self
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        let scan = NSMenuItem(title: "Scanner un ECG…", action: #selector(openScanWindow), keyEquivalent: "")
+        scan.target = self
+        menu.addItem(scan)
+        menu.addItem(.separator())
         menu.addItem(login)
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quitter", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
+    }
+
+    @objc private func openScanWindow() {
+        ScanWindowController.shared.show()
     }
 
     @objc private func toggleLaunchAtLogin() {

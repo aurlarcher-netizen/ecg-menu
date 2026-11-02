@@ -44,6 +44,9 @@ final class ECGReport: ObservableObject {
     @Published var rrMm = ""              // accepté uniquement en RSR
     @Published var qtMm = ""
 
+    /// Constatations ajoutées par l'analyse de Claude, hors formulaire
+    @Published var extraFindings = ""
+
     var paperSpeed: PaperSpeed {
         get { PaperSpeed(rawValue: paperSpeedRaw) ?? .s25 }
         set { objectWillChange.send(); paperSpeedRaw = newValue.rawValue }
@@ -59,6 +62,7 @@ final class ECGReport: ObservableObject {
         extrasystole = .none
         sv1Mm = ""; rv5Mm = ""
         rrMm = ""; qtMm = ""
+        extraFindings = ""
     }
 
     // MARK: Mesures
@@ -178,6 +182,8 @@ final class ECGReport: ObservableObject {
         if let sok = sokolow {
             parts.append("Indice de Sokolow-Lyon à \(fmt(sok)) mm : " + (sok > 35 ? "HVG électrique." : "pas d'HVG électrique."))
         }
+
+        if !extraFindings.isEmpty { parts.append(extraFindings) }
 
         return "ECG : " + parts.joined(separator: " ")
     }

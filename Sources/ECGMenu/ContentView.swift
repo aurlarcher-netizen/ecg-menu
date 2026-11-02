@@ -141,6 +141,9 @@ struct ContentView: View {
                 ForEach(PaperSpeed.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented).frame(width: 130)
+            Button { ScanWindowController.shared.show() } label: { Image(systemName: "doc.viewfinder") }
+                .help("Scanner un ECG")
+                .padding(.leading, 6)
         }
         .buttonStyle(.borderless)
         .padding(10)
@@ -335,6 +338,18 @@ struct ContentView: View {
         VStack(alignment: .trailing, spacing: 6) {
             Text("Compte rendu, modifiable avant de copier").font(.caption).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            if !report.extraFindings.isEmpty {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "sparkles").foregroundStyle(.purple)
+                    Text("Ajouté par Claude : \(report.extraFindings)")
+                        .font(.caption).frame(maxWidth: .infinity, alignment: .leading)
+                    Button { report.extraFindings = "" } label: { Image(systemName: "xmark") }
+                        .buttonStyle(.borderless)
+                        .help("Retirer ces constatations du compte rendu")
+                }
+                .padding(6)
+                .background(Color.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+            }
             TextEditor(text: $draft)
                 .font(.callout)
                 .scrollContentBackground(.hidden)
