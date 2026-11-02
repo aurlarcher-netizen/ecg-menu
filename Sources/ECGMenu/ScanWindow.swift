@@ -14,7 +14,8 @@ final class ScanWindowController: NSObject, NSWindowDelegate {
     /// Appelé avec la lecture de Claude, pour pré-remplir le compte rendu
     var onAnalysis: ((ECGAnalysis) -> Void)?
 
-    func show() {
+    /// `autoScan` : lance un scan sur la vitre dès que le scanner est prêt
+    func show(autoScan: Bool = false) {
         if window == nil {
             let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 720),
                              styleMask: [.titled, .closable, .resizable, .miniaturizable],
@@ -31,6 +32,7 @@ final class ScanWindowController: NSObject, NSWindowDelegate {
             scanner.onScan = { [doc] url in doc.load(url) }
         }
         if !browsing { scanner.start(); browsing = true }
+        if autoScan { scanner.scanFlatbedWhenReady() }
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
     }
@@ -127,7 +129,7 @@ struct ScanView: View {
                 Spacer()
                 Button { importFile() } label: { Label("Importer…", systemImage: "square.and.arrow.down") }
                 Button { openLatestScan() } label: { Label("Dernier scan", systemImage: "clock.arrow.circlepath") }
-                    .help(scanFolder.isEmpty ? "Choisir le dossier où iPrint&Scan enregistre les scans"
+                    .help(scanFolder.isEmpty ? "Choisir le dossier des scans (aussi réglable par clic droit sur l'icône)"
                                              : "Ouvre le fichier le plus récent de \(scanFolder)")
             }
             Text(message.isEmpty ? scanner.status : message)
@@ -171,6 +173,9 @@ struct ScanView: View {
             Button("Paysage") { doc.makeLandscape() }
                 .disabled(doc.pixelSize.height <= doc.pixelSize.width)
                 .help("Passer en paysage si l'ECG est en portrait")
+            Divider().frame(height: 20)
+            Button { doc.clear(); aiComment = ""; message = "" } label: { Label("Retirer", systemImage: "trash") }
+                .help("Retirer cette image pour en scanner ou en importer une autre")
             Divider().frame(height: 20)
             Button { doc.applyCrop() } label: { Label("Rogner", systemImage: "crop") }
                 .disabled(!doc.isCropped)
@@ -250,7 +255,7 @@ struct ScanView: View {
             let panel = NSOpenPanel()
             panel.canChooseDirectories = true
             panel.canChooseFiles = false
-            panel.message = "Choisissez le dossier où le scanner (ou iPrint&Scan) enregistre les scans"
+            panel.message = "Choisissez le dossier des scans (celui de l'app, ou celui d'iPrint&Scan)"
             guard panel.runModal() == .OK, let url = panel.url else { return }
             scanFolder = url.path
         }

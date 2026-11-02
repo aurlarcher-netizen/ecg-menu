@@ -27,6 +27,12 @@ final class ECGImageDocument: ObservableObject {
         return true
     }
 
+    /// Retire l'image en cours (mauvais fichier, nouvel ECG)
+    func clear() {
+        image = nil
+        crop = Self.fullFrame
+    }
+
     private static func loadImage(_ url: URL) -> CGImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
         // Applique l'orientation EXIF éventuelle (photos)

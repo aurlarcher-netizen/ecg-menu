@@ -81,6 +81,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let scan = NSMenuItem(title: "Scanner un ECG…", action: #selector(openScanWindow), keyEquivalent: "")
         scan.target = self
         menu.addItem(scan)
+        let settings = NSMenuItem(title: "Réglages du scanner", action: nil, keyEquivalent: "")
+        settings.submenu = scanSettingsMenu()
+        menu.addItem(settings)
         menu.addItem(.separator())
         menu.addItem(login)
         menu.addItem(.separator())
@@ -91,6 +94,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     @objc private func openScanWindow() {
         ScanWindowController.shared.show()
+    }
+
+    // MARK: Réglages du scanner
+
+    private func scanSettingsMenu() -> NSMenu {
+        let menu = NSMenu()
+        func item(_ title: String, _ action: Selector, on: Bool? = nil) {
+            let i = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            i.target = self
+            if let on { i.state = on ? .on : .off }
+            menu.addItem(i)
+        }
+        func folderName(_ path: String) -> String { path.isEmpty ? "non choisi" : URL(fileURLWithPath: path).lastPathComponent }
+
+        item("Scanner sur la vitre dès le clic sur le bouton de scan", #selector(toggleAutoScan), on: ScanSettings.autoFlatbedScan)
+        menu.addItem(.separator())
+        item("Dossier de scan : \(folderName(ScanSettings.scanFolder))…", #selector(chooseScanFolder))
+        menu.addItem(.separator())
+        item("Copie automatique dans un second dossier", #selector(toggleBackup), on: ScanSettings.backupEnabled)
+        item("Dossier de copie : \(folderName(ScanSettings.backupFolder))…", #selector(chooseBackupFolder))
+        return menu
+    }
+
+    @objc private func toggleAutoScan() { ScanSettings.autoFlatbedScan.toggle() }
+
+    @objc private func chooseScanFolder() {
+        if let path = ScanSettings.chooseFolder(message: "Dossier où enregistrer les scans d'ECG", current: ScanSettings.scanFolder) {
+            ScanSettings.scanFolder = path
+        }
+    }
+
+    @objc private func toggleBackup() {
+        // Activer sans dossier : le demander tout de suite
+        if !ScanSettings.backupEnabled && ScanSettings.backupFolder.isEmpty {
+            chooseBackupFolder()
+            guard !ScanSettings.backupFolder.isEmpty else { return }
+        }
+        ScanSettings.backupEnabled.toggle()
+    }
+
+    @objc private func chooseBackupFolder() {
+        if let path = ScanSettings.chooseFolder(message: "Second dossier où copier automatiquement chaque scan",
+                                                current: ScanSettings.backupFolder) {
+            ScanSettings.backupFolder = path
+        }
     }
 
     @objc private func toggleLaunchAtLogin() {

@@ -147,8 +147,10 @@ struct ContentView: View {
                 ForEach(PaperSpeed.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented).frame(width: 130)
-            Button { ScanWindowController.shared.show() } label: { Image(systemName: "doc.viewfinder") }
-                .help("Scanner un ECG")
+            Button { ScanWindowController.shared.show(autoScan: ScanSettings.autoFlatbedScan) } label: {
+                Image(systemName: "doc.viewfinder")
+            }
+            .help(ScanSettings.autoFlatbedScan ? "Scanner un ECG sur la vitre" : "Scanner un ECG")
                 .padding(.leading, 6)
         }
         .buttonStyle(.borderless)

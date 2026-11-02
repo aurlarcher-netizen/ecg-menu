@@ -19,6 +19,9 @@ final class ScannerManager: NSObject, ObservableObject, ICDeviceBrowserDelegate,
     private let browser = ICDeviceBrowser()
     private var browsing = false
     private var pendingScan = false
+    /// Scan sur la vitre à lancer dès que le scanner est prêt
+    private var autoScanPending = false
+    private var backupError: String?
     private var openRetried = false
     /// Une session est en cours de fermeture : en rouvrir une tout de suite échoue aussi
     private var closingSince: Date?
@@ -28,6 +31,19 @@ final class ScannerManager: NSObject, ObservableObject, ICDeviceBrowserDelegate,
     private var preferredName: String? {
         get { UserDefaults.standard.string(forKey: "scannerName") }
         set { UserDefaults.standard.set(newValue, forKey: "scannerName") }
+    }
+
+    /// Lance un scan sur la vitre, tout de suite ou dès que le scanner sera prêt
+    func scanFlatbedWhenReady() {
+        autoScanPending = true
+        runAutoScanIfReady()
+    }
+
+    private func runAutoScanIfReady() {
+        guard autoScanPending, !isScanning, let s = selected, s.hasOpenSession, !sources.isEmpty else { return }
+        autoScanPending = false
+        if sources.contains(.flatbed) { source = .flatbed }
+        scan()
     }
 
     func start() {
@@ -49,6 +65,7 @@ final class ScannerManager: NSObject, ObservableObject, ICDeviceBrowserDelegate,
 
     /// Ferme la connexion au scanner (la recherche reste active)
     func stop() {
+        autoScanPending = false
         pendingScan = false
         isScanning = false
         if let s = selected, s.hasOpenSession {
@@ -114,6 +131,7 @@ final class ScannerManager: NSObject, ObservableObject, ICDeviceBrowserDelegate,
         guard !sources.isEmpty else { return }
         if !sources.contains(source) { source = sources.contains(.flatbed) ? .flatbed : sources[0] }
         status = "Prêt : \(scanner.name ?? "scanner")"
+        runAutoScanIfReady()
     }
 
     // MARK: ICDeviceBrowserDelegate
@@ -201,18 +219,28 @@ final class ScannerManager: NSObject, ObservableObject, ICDeviceBrowserDelegate,
         }
 
         scanner.transferMode = .fileBased
-        scanner.downloadsDirectory = FileManager.default.temporaryDirectory
+        scanner.downloadsDirectory = ScanSettings.scanDirectory
         scanner.documentName = "ECG-\(Int(Date().timeIntervalSince1970))"
         scanner.documentUTI = UTType.png.identifier
+        backupError = nil
         scanner.requestScan()
     }
 
     func scannerDevice(_ scanner: ICScannerDevice, didScanTo url: URL) {
+        if let error = ScanSettings.backup(url) { backupError = error }
         onScan?(url)
     }
 
     func scannerDevice(_ scanner: ICScannerDevice, didCompleteScanWithError error: Error?) {
-        finish(error.map { "Échec du scan : \($0.localizedDescription)" } ?? "Scan terminé.")
+        if let error { finish("Échec du scan : \(error.localizedDescription)"); return }
+        var message = "Scan terminé."
+        if ScanSettings.scanDirectory != FileManager.default.temporaryDirectory {
+            message += " Enregistré dans \(ScanSettings.scanDirectory.lastPathComponent)"
+                + (ScanSettings.backupEnabled && !ScanSettings.backupFolder.isEmpty && backupError == nil
+                   ? ", copie dans \(URL(fileURLWithPath: ScanSettings.backupFolder).lastPathComponent)." : ".")
+        }
+        if let backupError { message += " " + backupError }
+        finish(message)
     }
 
     private func finish(_ message: String) {
